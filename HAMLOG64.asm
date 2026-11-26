@@ -1,6 +1,6 @@
 //==============================================================================
 // HAMLOG64 - ham radio logger for C64 + REU        (KickAssembler)
-// Version V1.21  (the text Settings shows is txt_version, near the bottom of the file)
+// Version V1.22  (the text Settings shows is txt_version, near the bottom of the file)
 //
 // Keys:   RETURN / CRSR down = next field    CRSR up = previous field
 //         CRSR left/right    = move in field DEL = backspace
@@ -2774,6 +2774,7 @@ mn_exit:
 
 //------------------------------------------------------------------------------
 // File menu (menu option 4): backup / restore the whole log through the Ultimate's file system
+// The current folder is shown on row 14 (show_path); row 23 is for status messages.
 //------------------------------------------------------------------------------
 file_menu:
         jsr init_screen
@@ -2791,29 +2792,32 @@ fm_key: jsr GETIN
         cmp #$31                // '1'
         bne fm_k2
         jsr do_backup
-        jmp fm_key
+        jmp fm_done
 fm_k2:  cmp #$32                // '2'
         bne fm_k2b
         jsr do_restore
-        jmp fm_key
+        jmp fm_done
 fm_k2b: cmp #$33                // '3': export an ADIF file
         bne fm_k2c
         jsr do_export
-        jmp fm_key
+        jmp fm_done
 fm_k2c: cmp #$34                // '4': import an ADIF file
         bne fm_k2d
         jsr do_import
-        jmp fm_key
+        jmp fm_done
 fm_k2d: cmp #$35                // '5': choose the folder
         bne fm_k3
         jsr do_folder
-        jmp fm_key
+        jmp fm_done
 fm_k3:  cmp #$88                // F7
         beq fm_exit
         cmp #$0d                // RETURN
         beq fm_exit
         cmp #$03                // RUN/STOP
         beq fm_exit
+        jmp fm_key
+fm_done:
+        jsr show_path           // redraw the folder line (row 14); row 23 message is left alone
         jmp fm_key
 fm_exit:
         jmp redraw_main
@@ -3125,35 +3129,45 @@ fd_c3:  lda fn_len
         ldx #>st_scr
         jmp show_msg
 fd_ok:  jsr stash_header
-        jmp show_path
-
-// show_path: ask the Ultimate where it now is (DOS_CMD_GET_PATH) and show it on row 23
-show_path:
-        jsr cmd_clear
-        lda #$01
-        jsr cmd_put
-        lda #$12                // DOS_CMD_GET_PATH
-        jsr cmd_put
-        ldx #5
-        jsr uci_run
-        bcc sp_ok
         lda #<msg_fldsaved
         ldx #>msg_fldsaved
-        jmp show_msg
-sp_ok:  lda #<msg_fldok
-        ldx #>msg_fldok
-        jsr show_msg
-        lda #<(SCREEN + 23*40 + 8)
+        jsr show_msg            // row 23: confirmation; show_path below only touches row 14
+        jmp show_path
+
+// show_path: show the remembered folder on row 14, its own line.
+// Row 23 is the status-message line (show_msg / input_line), so anything
+// drawn there is wiped by the next backup / error / prompt. Row 14 is
+// only touched here, and file_menu redraws it after every operation
+// (fm_done), so the folder stays visible while messages come and go.
+// Source is fld_buf, the folder HAMLOG will actually use in need_folder,
+// not a fresh DOS_CMD_GET_PATH query: no UCI call, no failure mode, and
+// it always fits - FLD_MAX 28 chars at col 11 ends at col 38.
+// Old code also started the path at col 8, overwriting "FOLDER: " in
+// "CURRENT FOLDER: " (16 chars, so the path belonged at col 16).
+show_path:
+        lda #<(SCREEN + 14*40)
         sta zp_dst
-        lda #>(SCREEN + 23*40 + 8)
+        lda #>(SCREEN + 14*40)
+        sta zp_dst+1
+        ldy #39
+        lda #$20
+sp_clr: sta (zp_dst),y          // clear the whole row first, or a shorter
+        dey                     // new folder leaves ghost characters behind
+        bpl sp_clr
+        :Puts(14, 3, txt_fldlabel)
+        lda fld_len
+        bne sp_have
+        :Puts(14, 11, txt_fldnone)
+        rts
+sp_have:
+        lda #<(SCREEN + 14*40 + 11)
+        sta zp_dst
+        lda #>(SCREEN + 14*40 + 11)
         sta zp_dst+1
         ldy #0
-sp_l:   cpy uci_dn
+sp_l:   cpy fld_len
         bcs sp_d
-        cpy #31
-        bcs sp_d
-        lda uci_dat,y
-        beq sp_d
+        lda fld_buf,y
         jsr asc2scr
         sta (zp_dst),y
         iny
@@ -5251,7 +5265,7 @@ msg_deleted: .text "QSO DELETED"
             .byte 0
 // Shown in Settings. Change this one line when you bump the version (20 characters max
 // fits the row; the text is upper case, as everything on this screen is).
-txt_version: .text "HAMLOG64 VERSION V1.21"
+txt_version: .text "HAMLOG64 VERSION V1.22"
             .byte 0
 txt_mntitle: .text "MENU"
             .byte 0
@@ -5277,11 +5291,13 @@ txt_fm5:    .text "5  CHOOSE ULTIMATE FOLDER"
             .byte 0
 txt_fldprompt: .text "NEW FOLDER: "
             .byte 0
-msg_fldok:  .text "CURRENT FOLDER: "
+txt_fldlabel: .text "FOLDER:"
+            .byte 0
+txt_fldnone: .text "(NONE)"
             .byte 0
 msg_fldsaved: .text "FOLDER SAVED"
             .byte 0
-msg_nofolder: .text "CHOOSE A FOLDER FIRST (OPTION 3)"
+msg_nofolder: .text "CHOOSE A FOLDER FIRST (OPTION 5)"
             .byte 0
 txt_fmhelp: .text "1-5 = CHOOSE   F7 = BACK"
             .byte 0

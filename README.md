@@ -33,4 +33,5 @@ Target hardware: C64 Ultimate (also works on a stock C64 with a REU, with `USE_U
 
 ## Version history
 
-- v1.21: initial release in version control
+- v1.22: file menu now shows the current folder on its own row, and stays visible after backup / restore / export / import
+- v1.21: previous release
