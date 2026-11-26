@@ -1,0 +1,12 @@
+# Kick Assembler build outputs
+*.prg
+*.sym
+*.log
+*.bin
+*.vs
+*.breakpoints
+# Editor / OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
